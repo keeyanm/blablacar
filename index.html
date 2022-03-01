@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.16.2/xlsx.full.min.js"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&display=swap" rel="stylesheet">
+        <script src="https://code.highcharts.com/highcharts.js"></script>
+        <script src="https://code.highcharts.com/modules/exporting.js"></script>
+        <script src="https://code.highcharts.com/modules/export-data.js"></script>
+        <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+        <script>
+
+            var fulldata;
+            $(function() {
+                oFileIn = document.getElementById('file-input');
+                if(oFileIn.addEventListener) {
+                    oFileIn.addEventListener('change', fileReader, false);
+                }
+            });
+  
+
+            function analyse(data, intervals) {
+                console.log(data);
+                columnnames = data[0]
+                departuretimes = []
+                for (let i = 1; i < data.length; i++) {
+                    departuretimes.push(parseInt(data[i][1].replace(':','')));
+                }
+                console.log(departuretimes);
+                bins = [
+                    0,
+                    300,
+                    600,
+                    900,
+                    1200,
+                    1500,
+                    1800,
+                    2100,
+                    2400
+                ]
+                freqs = []
+                avgprices = []
+                avgpassengers = []
+                for (i = 0; i < (bins.length-1); i++) {
+                    freq = 0
+                    avgpassengerstotal = 0
+                    avgpricestotal = 0
+                    max = bins[i+1]
+                    min = bins[i]
+                    for (j= 1; j < data.length; j++) {
+                        if ((parseInt(data[j][1].replace(':','')) < max) && (parseInt(data[j][1].replace(':','')) >= min)){
+                            freq = freq + 1
+                            avgpassengerstotal = avgpassengerstotal + data[j][7]
+                            avgpricestotal = avgpricestotal + parseFloat(data[j][6])
+                        }
+                    }
+                    avgprices.push({
+                        'freq': freq,
+                        'bin': String(min).charAt(0),
+                        'price': avgpricestotal/freq
+                    })
+                    avgpassengers.push({
+                        'freq': freq,
+                        'bin': String(min).charAt(0),
+                        'passenger': avgpassengerstotal/freq
+                    })
+                    freqs.push(freq);                
+                }
+
+                Highcharts.chart('container', {
+                    chart: {
+                        type: 'column'
+                    },
+                    title: {
+                        text: 'Departure Times: Frequency Distribution'
+                    },
+                    subtitle: {
+                        text: 'Source: BlaBlaCar'
+                    },
+                    xAxis: {
+                        categories: [
+                        '0:00 - 2:59',
+                        '3:00 - 5:59',
+                        '6:00 - 8:59',
+                        '9:00 - 11:59',
+                        '12:00 - 14:59',
+                        '15:00 - 17:59',
+                        '18:00 - 20:59',
+                        '21:00 - 23:59',
+                        ],
+                        crosshair: true,
+                        title: {
+                        text: 'Departure Times'
+                        }
+                    },
+                    yAxis: {
+                        min: 0,
+                        title: {
+                        text: 'Number of Rides'
+                        }
+                    },
+                    tooltip: {
+                        headerFormat: '<span style="font-size:10px">{point.key}</span><table>',
+                        formatter: function() { 
+                                letter = parseInt(this.x.charAt(0))
+                                for (i = 0; i < avgprices.length; i++) {
+                                    if ((avgprices[i]['freq'] == this.y) && (avgprices[i]['bin']==letter)) {
+                                        price = avgprices[i]['price']
+                                        break
+                                    }
+                                }
+                                for (i = 0; i < avgpassengers.length; i++) {
+                                    if ((avgpassengers[i]['freq'] == this.y) && (avgpassengers[i]['bin']==letter)) {
+                                        passenger = avgpassengers[i]['passenger']
+                                        break
+                                    }
+                                }
+                                console.log('Rides: ' + this.y + '<br> Average Passengers: ' + passenger.toFixed(2) + '<br> Average Price: ' +price.toFixed(2))
+                                return '<tr><td style="padding:0">Rides: <b>' + this.y + '</b><br> Average Passengers: <b>' + passenger.toFixed(2) + '</b><br> Average Price: ₹<b>' +price.toFixed(2); + '</b></td></tr>'
+                        },
+                        pointFormat: '<tr>' +
+                        '<td style="padding:0"><b>{point.y:.1f} Rides</b></td></tr>',
+                        footerFormat: '</table>',
+                        shared: true,
+                        useHTML: true
+                    },
+                    plotOptions: {
+                        column: {
+                            dataLabels: { 
+                            enabled: true
+                        },
+                        pointPadding: 0.2,
+                        borderWidth: 0
+                        }                        
+                    },
+                    series: [{
+                        data: freqs,
+                        // visible: false,
+                        showInLegend: false
+                    }, {
+                        data: freqs,
+                        visible: false,
+                        showInLegend: false
+                    }]
+                });
+            }
+
+
+            function fileReader(oEvent) {
+                var oFile = oEvent.target.files[0];
+                var sFilename = oFile.name;
+
+                var reader = new FileReader();
+                var result = {};
+
+                reader.onload = function (e) {
+                    var data = e.target.result;
+                    data = new Uint8Array(data);
+                    var workbook = XLSX.read(data, {type: 'array'});
+                    console.log(workbook);
+                    var result = {};
+                    workbook.SheetNames.forEach(function (sheetName) {
+                        var roa = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {header: 1});
+                        if (roa.length) result[sheetName] = roa;
+                    });
+                    // see the result, caution: it works after reader event is done.
+                    analyse(result['Sheet1'],8);
+                };
+                reader.readAsArrayBuffer(oFile);
+            }
+
+        </script>
+        <style>
+
+            body {
+                font-family: 'Montserrat', sans-serif;
+            }
+            .highcharts-data-label {
+                font-size: 10px !important;
+            }
+            .highcharts-figure,
+            .highcharts-data-table table {
+                min-width: 310px;
+                max-width: 800px;
+                margin: 1em auto;
+            }
+
+            #container {
+                height: 400px;
+            }
+
+            .highcharts-data-table table {
+                font-family: Verdana, sans-serif;
+                border-collapse: collapse;
+                border: 1px solid #ebebeb;
+                margin: 10px auto;
+                text-align: center;
+                width: 100%;
+                max-width: 500px;
+            }
+
+            .highcharts-data-table caption {
+                padding: 1em 0;
+                font-size: 1.2em;
+                color: #555;
+            }
+
+            .highcharts-data-table th {
+                font-weight: 600;
+                padding: 0.5em;
+            }
+
+            .highcharts-data-table td,
+            .highcharts-data-table th,
+            .highcharts-data-table caption {
+                padding: 0.5em;
+            }
+
+            .highcharts-data-table thead tr,
+            .highcharts-data-table tr:nth-child(even) {
+                background: #f8f8f8;
+            }
+
+            .highcharts-data-table tr:hover {
+                background: #f1f7ff;
+            }
+            label {
+                cursor: pointer;
+                
+                /* Style as you please, it will become the visible UI component. */
+            }
+
+            #file-input {
+                opacity: 0;
+                position: absolute;
+                z-index: -1;
+            }
+
+            .opt {
+                border: 3px solid #999999;
+                color: #999999;
+                letter-spacing: 1px;
+                text-decoration: none;
+                padding-left: 15px;
+                padding-right: 15px;
+                text-align: center;
+                line-height: 80px;
+                cursor: pointer;
+                transition: ease-out 0.5s;
+                -webkit-transition: ease-out 0.5s;
+                -moz-transition: ease-out 0.5s;
+                position: relative;
+                display: inline-block;
+                margin-right:10px;
+                border: 1px solid #E2E5de;
+                padding-left: 15px;
+                padding-right: 15px;
+                text-align: center;
+                line-height: 80px;
+                width: fit-content;
+                height: 80px;
+                background-color: #8BC249;
+                color: white !important;
+                margin-left: 20px !important;
+            }
+
+            .btn.btn-border-3::after,
+            .btn.btn-border-3::before {
+                position: absolute;
+                content: "";
+                width: 0;
+                height: 0;
+                transition: .5s;
+            }
+
+            .btn.btn-border-3::after {
+                top: -9px;
+                left: -9px;
+                border-top: 3px solid transparent;
+                border-left: 3px solid transparent;
+            }
+
+            .btn.btn-border-3::before {
+                bottom: -9px;
+                right: -9px;
+                border-bottom: 3px solid transparent;
+                border-right: 3px solid transparent;
+            }
+
+            .btn.btn-border-3:hover {
+                color: #222222;
+            }
+
+            .btn.btn-border-3:hover::after,
+            .btn.btn-border-3:hover::before {
+                width: 30px;
+                height: 30px;
+                border-color: #222222;
+            }
+
+            #topsec {
+                display: flex;
+                width: 100%;
+            }
+            #left {
+                width: 50%;
+                border-right: 1px solid gray;
+            }
+            #right {
+                width: 50%;
+                text-align: center;
+            }
+            #header {
+                text-align: center;
+                padding: 25px;
+                font-size: larger;
+                font-weight: 900;
+            }
+            #container {
+                padding-top: 50px;
+            }
+        </style>
+    </head>
+    <body>
+
+        <div id='topsec'>
+            <div id='left'>
+                <div id='header'>
+                    Frequency Distribution Generator
+                </div>
+            </div>
+            <div id='right'>
+                <label for="file-input" class='opt btn btn-border-3'>Choose Excel File of BlaBlaCar Data</label>
+                <input type="file" id="file-input" />
+            </div>
+        </div>
+    
+        <figure class="highcharts-figure">
+            <div id="container"></div>
+          </figure>
+
+    </body>
+</html>
